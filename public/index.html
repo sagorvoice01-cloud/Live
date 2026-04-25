@@ -469,6 +469,16 @@ input[type=file]{display:none}
 
 <div id="toasts"></div>
 
+<!-- Preview Modal -->
+<div id="previewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;display:none;align-items:center;justify-content:center" onclick="if(event.target===this)closePreview()">
+  <div style="background:var(--s1);border:1px solid var(--border);border-radius:13px;padding:18px;max-width:700px;width:94%;position:relative">
+    <button onclick="closePreview()" style="position:absolute;top:10px;right:10px;background:var(--s2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:3px 10px;cursor:pointer;font-size:12px">✕ Close</button>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="previewTitle">Preview</div>
+    <video id="previewPlayer" controls style="width:100%;border-radius:8px;background:#000;max-height:380px"></video>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px" id="previewMeta"></div>
+  </div>
+</div>
+
 <script>
 const SERVER = window.location.origin;
 
@@ -575,6 +585,7 @@ function renderVideos() {
         ${statusHtml}
       </div>
       <div class="video-actions">
+        ${!v.sourceUrl || v.fileExists ? `<button class="btn btn-secondary btn-sm" onclick="previewVideo('${v.id}','${esc(v.name)}','${v.path}')">▶ Preview</button>` : ''}
         ${v.sourceUrl ? `<button class="btn btn-secondary btn-sm" onclick="changeUrl('${v.id}')">🔗 URL</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="delVideo('${v.id}')">🗑</button>
       </div>
@@ -989,6 +1000,18 @@ const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;
 const pad=n=>String(n).padStart(2,'0');
 const platIcon=p=>({youtube:'▶️',twitch:'💜',facebook:'📘',custom:'🔗'})[p]||'🎥';
+
+function previewVideo(id, name, path) {
+  document.getElementById('previewTitle').textContent = name;
+  document.getElementById('previewPlayer').src = SERVER + path;
+  document.getElementById('previewMeta').textContent = 'File: ' + name;
+  const m = document.getElementById('previewModal');
+  m.style.display = 'flex';
+}
+function closePreview() {
+  document.getElementById('previewPlayer').pause();
+  document.getElementById('previewModal').style.display = 'none';
+}
 
 window.addEventListener('DOMContentLoaded',init);
 </script>
