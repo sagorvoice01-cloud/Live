@@ -304,6 +304,7 @@
             <div style="font-size:12px;color:var(--muted)">or click to browse — mp4/webm/mov supported</div>
             <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
               <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();document.getElementById('fileInput').click()">Select File</button>
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();addVideoByUrl()">Add by URL</button>
             </div>
           </div>
           <input type="file" id="fileInput" accept="video/*" onchange="handleFileSelect(this.files[0]);this.value=''">
@@ -809,6 +810,29 @@ function renderVideoList() {
     </div>
   `).join('');
   renderLibraryPicker();
+}
+
+async function addVideoByUrl() {
+  const url = prompt('Video URL দাও (Google Drive direct link বা MP4 URL):');
+  if (!url) return;
+  const name = prompt('Video-র নাম দাও:') || 'video.mp4';
+  showAlert('⏳ Downloading video... কিছুক্ষণ অপেক্ষা করো', 'info');
+  try {
+    const res = await fetch(SERVER + '/api/videos/add-url', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, name})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showAlert('✅ Video added! এখন playlist-এ যোগ করো', 'success');
+      api.getVideos().then(renderVideos);
+    } else {
+      showAlert('❌ Error: ' + (data.error || 'Failed'), 'danger');
+    }
+  } catch(e) {
+    showAlert('❌ Error: ' + e.message, 'danger');
+  }
 }
 
 function handleFileSelect(file) {
