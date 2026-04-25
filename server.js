@@ -258,6 +258,7 @@ function launchFFmpeg(streamId, obj) {
   const q   = qualityPreset(obj.slot.quality||'480p');
   const url = obj.rtmpUrl;
   const args = [
+    '-stream_loop', '-1',  // ← infinite loop — video কখনো শেষ হবে না
     '-re', '-i', video.serverPath,
     '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
     '-maxrate',q.vbr,'-bufsize',q.buf,'-pix_fmt','yuv420p','-r','25','-g','50',
@@ -280,16 +281,16 @@ function launchFFmpeg(streamId, obj) {
   proc.on('exit', (code,sig) => {
     log(streamId, `⏹ exit code=${code} sig=${sig}`);
     if (obj.stopped) return;
+    // Always restart — stream never stops unless manually killed
+    obj.restarts++;
+    const delay = code===0 ? 800 : 5000;
+    log(streamId, `🔄 Auto-restart #${obj.restarts} in ${delay/1000}s...`);
+    // Next video in playlist on clean exit
     if (code===0) {
       obj.idx++;
-      if (obj.idx >= obj.videos.length) {
-        if (obj.slot.loop) obj.idx=0; else return killStream(streamId);
-      }
-    } else {
-      obj.restarts++;
-      log(streamId, `⚠ Restart #${obj.restarts} in 5s...`);
+      if (obj.idx >= obj.videos.length) obj.idx=0; // always loop back
     }
-    setTimeout(() => launchFFmpeg(streamId,obj), code===0 ? 800 : 5000);
+    setTimeout(() => launchFFmpeg(streamId,obj), delay);
   });
   proc.on('error', err => {
     log(streamId, `✖ ${err.message}`);
@@ -405,15 +406,36 @@ setInterval(() => {
     if (!s.stopped && s.proc?.exitCode!=null) killStream(id);
 }, 20000);
 
-// ── On startup: re-download missing URL videos ────────────────
-setTimeout(() => {
+// ── On startup: re-download missing URL videos + restart active streams ──────
+setTimeout(async () => {
   const missing = state.videos.filter(v=>v.sourceUrl&&!fs.existsSync(v.serverPath));
-  if (missing.length) console.log(`[Startup] Re-downloading ${missing.length} missing video(s)...`);
-  missing.forEach(v => {
-    dlStatus.set(v.id, { status:'downloading', pct:0 });
-    doDownload(v.id, v.sourceUrl, v.serverPath);
-  });
-}, 3000);
+  if (missing.length) {
+    console.log(`[Startup] Re-downloading ${missing.length} missing video(s)...`);
+    await Promise.all(missing.map(v => new Promise(resolve => {
+      dlStatus.set(v.id, { status:'downloading', pct:0 });
+      doDownload(v.id, v.sourceUrl, v.serverPath, resolve);
+    })));
+  }
+
+  // Auto-restart any slots that were live before restart
+  const liveSlots = state.slots.filter(s=>s.status==='live');
+  if (liveSlots.length) {
+    console.log(`[Startup] Auto-restarting ${liveSlots.length} live slot(s)...`);
+    for (const slot of liveSlots) {
+      const videos = (slot.playlist||[])
+        .map(id=>state.videos.find(v=>v.id===id))
+        .filter(v=>v&&fs.existsSync(v.serverPath));
+      if (!videos.length) { slot.status='idle'; saveState(); continue; }
+      const streamId = crypto.randomUUID();
+      const obj = { slot, videos, rtmpUrl:buildRtmp(slot.platform,slot.key),
+        startTime:Date.now(), idx:0, proc:null, stopped:false, restarts:0 };
+      activeStreams.set(streamId, obj);
+      streamLogs.set(streamId, []);
+      launchFFmpeg(streamId, obj);
+      console.log(`[Startup] Stream restarted for slot: ${slot.name}`);
+    }
+  }
+}, 5000);
 
 // ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
