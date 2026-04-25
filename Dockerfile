@@ -27,7 +27,6 @@ COPY public/ ./public/
 RUN mkdir -p /app/data_local/uploads
 
 # Cloud Run sets PORT env var automatically
-ENV PORT=8080
 ENV NODE_ENV=production
 
 # Health check
