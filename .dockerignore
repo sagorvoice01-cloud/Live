@@ -1,0 +1,9 @@
+node_modules
+data_local
+*.log
+.git
+.gitignore
+README*
+DEPLOYMENT*
+setup.sh
+streamloop-*.zip
